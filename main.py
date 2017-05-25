@@ -8,10 +8,10 @@ import sys
 # params
 resx = 256
 res = (resx, resx, 3)
-narray = np.zeros(res, dtype=np.int8)
+narray = np.zeros(res, dtype=np.uint8)
 turb_factor = 8
 noctaves = 8
-npeaks = 8
+npeaks = 2
 peakiness = 1.5
 stratification = 0
 base_height = 0.1
@@ -71,12 +71,18 @@ for x in range(res[0]):
                 height_val = max(height_val, height)
         color = terrain_to_color[height_to_terrain[height_val]]
         new_color = [0, 0, 0]
+        val = min(max(val, 0.0), 1.0)
         new_color[0] = int(color[0] * np.clip(2.0 * val, 0.1, 1))
         new_color[1] = int(color[1] * np.clip(2.0 * val, 0.1, 1))
         new_color[2] = int(color[2] * np.clip(2.0 * val, 0.1, 1))
         narray[x, y, :] = new_color
-    sys.stdout.write("\r{:3.2f}% done ".format(100 * float(x) / (res[0])))
-    sys.stdout.flush()
+
+        sys.stdout.write("\r{:3.2f}% done ".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
+        sys.stdout.flush()
 
 im = Image.fromarray(narray, mode="RGB")
 Image._show(im)
+
+print "\nIslands generated with offset (" + str(offset[0]) + ", " + str(offset[1]) + ") and peaks:"
+for peak in peaks:
+    print peak
