@@ -4,16 +4,17 @@ import noise
 import math
 import random
 import sys
+import scipy.signal
 
 # params
-resx = 256
+resx = 1024
 res = (resx, resx)
 turb_factor = 8
 noctaves = 8
 npeaks = 2
 peakiness = 1.5
 stratification = 0
-base_height = 0.1
+base_height = 0.0
 
 # random params
 offset = (random.uniform(0, 1), random.uniform(0, 1))
@@ -77,6 +78,23 @@ for x in range(res[0]):
 
         sys.stdout.write("\r{:3.2f}% done ".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
         sys.stdout.flush()
+
+print "\ndone.\nGenerating gradient..."
+xFilter = [[-1, 0, 1]]
+yFilter = [[-1], [0], [1]]
+gradX = scipy.signal.convolve2d(terrain_array, xFilter, mode='same')
+gradY = scipy.signal.convolve2d(terrain_array, yFilter, mode='same')
+grad_array = np.zeros(res, dtype=np.float32)
+gradim_array = np.zeros((res[0], res[1], 3), dtype=np.uint8)
+for x in range(res[0]):
+    for y in range(res[1]):
+        grad_array[x, y] = math.sqrt(gradX[x, y] * gradX[x, y] + gradY[x, y] * gradY[x, y])
+        #gradim_array[x, y] = int(255 * grad_array[x, y])
+        if grad_array[x, y] < 0.001:
+            gradim_array[x, y] = [255, 0, 0]
+
+im = Image.fromarray(gradim_array, mode="RGB")
+Image._show(im)
 
 print "\ndone.\nGenerating image..."
 im_array = np.zeros((res[0], res[1], 3), dtype=np.uint8)
