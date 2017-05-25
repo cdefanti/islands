@@ -7,8 +7,7 @@ import sys
 
 # params
 resx = 256
-res = (resx, resx, 3)
-narray = np.zeros(res, dtype=np.uint8)
+res = (resx, resx)
 turb_factor = 8
 noctaves = 8
 npeaks = 2
@@ -39,6 +38,9 @@ terrain_to_color = {
     'snow'      : [255, 255, 255]
 }
 
+print "Generating noise...\n"
+
+noise_array = np.zeros(res, dtype=np.float32)
 for x in range(res[0]):
     for y in range(res[1]):
         xc = (float(x) / res[0] * 2.0) - 1.0
@@ -49,9 +51,21 @@ for x in range(res[0]):
             val += (noise.pnoise2((xc + offset[0]) * i, (yc + offset[1]) * i, octaves=noctaves)) / i
             i *= 2
         val = (val + 1.0) / 2.0
+        noise_array[x, y] = val
+
+        sys.stdout.write("\r{:3.2f}%".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
+        sys.stdout.flush()
+
+print "\ndone.\nGenerating terrain..."
+terrain_array = np.zeros(res, dtype=np.float32)
+for x in range(res[0]):
+    for y in range(res[1]):
+        val = noise_array[x, y]
         val = math.pow(val, peakiness)
 
         # make peaks
+        xc = (float(x) / res[0] * 2.0) - 1.0
+        yc = (float(y) / res[1] * 2.0) - 1.0
         dist = 1
         for peak in peaks:
             dist = min(dist, math.sqrt((xc - peak[0]) * (xc - peak[0]) + (yc - peak[1]) * (yc - peak[1])))
@@ -59,6 +73,16 @@ for x in range(res[0]):
 
         # increase by base height
         val += base_height
+        terrain_array[x, y] = val
+
+        sys.stdout.write("\r{:3.2f}% done ".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
+        sys.stdout.flush()
+
+print "\ndone.\nGenerating image..."
+im_array = np.zeros((res[0], res[1], 3), dtype=np.uint8)
+for x in range(res[0]):
+    for y in range(res[1]):
+        val = terrain_array[x, y]
 
         # discretize steps
         if stratification > 0:
@@ -72,17 +96,17 @@ for x in range(res[0]):
         color = terrain_to_color[height_to_terrain[height_val]]
         new_color = [0, 0, 0]
         val = min(max(val, 0.0), 1.0)
-        new_color[0] = int(color[0] * np.clip(2.0 * val, 0.1, 1))
-        new_color[1] = int(color[1] * np.clip(2.0 * val, 0.1, 1))
-        new_color[2] = int(color[2] * np.clip(2.0 * val, 0.1, 1))
-        narray[x, y, :] = new_color
+        new_color[0] = int(color[0] * 2.0 * val)
+        new_color[1] = int(color[1] * 2.0 * val)
+        new_color[2] = int(color[2] * 2.0 * val)
+        im_array[x, y, :] = new_color
 
         sys.stdout.write("\r{:3.2f}% done ".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
         sys.stdout.flush()
 
-im = Image.fromarray(narray, mode="RGB")
+im = Image.fromarray(im_array, mode="RGB")
 Image._show(im)
 
-print "\nIslands generated with offset (" + str(offset[0]) + ", " + str(offset[1]) + ") and peaks:"
+print "\ndone.\nIslands generated with offset (" + str(offset[0]) + ", " + str(offset[1]) + ") and peaks:"
 for peak in peaks:
     print peak
