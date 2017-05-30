@@ -7,14 +7,16 @@ import sys
 import scipy.signal
 
 # params
-resx = 1024
+resx = 256
 res = (resx, resx)
-turb_factor = 8
-noctaves = 8
-npeaks = 2
-peakiness = 1.5
+turb_factor = 4
+noctaves = 4
+npeaks = 3
+peakiness = 0.8
 stratification = 0
-base_height = 0.0
+base_height = -0.10
+
+simulate_rainfall = False
 
 # random params
 offset = (random.uniform(0, 1), random.uniform(0, 1))
@@ -36,7 +38,8 @@ terrain_to_color = {
     'beach'     : [237, 201, 175],
     'forest'    : [34, 139, 34],
     'mountain'  : [100, 100, 30],
-    'snow'      : [255, 255, 255]
+    'snow'      : [255, 255, 255],
+    'lake'      : [255, 0, 0]
 }
 
 print "Generating noise...\n"
@@ -85,16 +88,54 @@ yFilter = [[-1], [0], [1]]
 gradX = scipy.signal.convolve2d(terrain_array, xFilter, mode='same')
 gradY = scipy.signal.convolve2d(terrain_array, yFilter, mode='same')
 grad_array = np.zeros(res, dtype=np.float32)
+graddir_array = np.zeros((res[0], res[1], 2), dtype=np.float32)
 gradim_array = np.zeros((res[0], res[1], 3), dtype=np.uint8)
 for x in range(res[0]):
     for y in range(res[1]):
         grad_array[x, y] = math.sqrt(gradX[x, y] * gradX[x, y] + gradY[x, y] * gradY[x, y])
-        #gradim_array[x, y] = int(255 * grad_array[x, y])
-        if grad_array[x, y] < 0.001:
-            gradim_array[x, y] = [255, 0, 0]
+        graddir_array[x, y] = (gradX[x, y], gradY[x, y])
+        gradim_array[x, y] = int(5 * 255 * grad_array[x, y])
+
+        sys.stdout.write("\r{:3.2f}%".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
+        sys.stdout.flush()
 
 im = Image.fromarray(gradim_array, mode="RGB")
 Image._show(im)
+
+if simulate_rainfall:
+    print "\ndone.\nSimulating rainfall..."
+    MAXITER = 100
+    MINDELTA = 0.001
+    water_array = np.zeros(res, dtype=np.float32)
+    for x in range(res[0]):
+        for y in range(res[1]):
+            if terrain_array[x, y] < 0.2:
+                continue
+            coord = [float(x) / res[0] * 2.0 - 1.0, float(y) / res[1] * 2.0 - 1.0]
+            for j in range(MAXITER):
+                pos = [int((coord[0] + 1.0) * (res[0] / 2)), int((coord[1] + 1.0) * (res[1] / 2))]
+                if pos[0] in range(res[0]) and pos[1] in range(res[1]):
+                    water_array[pos[0], pos[1]] += 1.0 / (res[0] * res[1] * MAXITER)
+                    delta = graddir_array[pos[0], pos[1]]
+                else:
+                    break
+                if delta[0] * delta[0] + delta[1] * delta[1] > MINDELTA * MINDELTA:
+                    coord += delta
+                else:
+                    water_array[pos[0], pos[1]] += float(MAXITER - j) / (res[0] * res[1] * MAXITER)
+                    break
+
+            sys.stdout.write("\r{:3.2f}%".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
+            sys.stdout.flush()
+    print np.max(water_array)
+    water_image = np.zeros((res[0], res[1], 3), dtype=np.uint8)
+    for x in range(res[0]):
+        for y in range(res[1]):
+            val = int(water_array[x, y] / np.max(water_array) * 255)
+            water_image[x, y] = [val, val, val]
+
+    im = Image.fromarray(water_image, mode="RGB")
+    Image._show(im)
 
 print "\ndone.\nGenerating image..."
 im_array = np.zeros((res[0], res[1], 3), dtype=np.uint8)
@@ -106,14 +147,18 @@ for x in range(res[0]):
         if stratification > 0:
             val = int(val * stratification) / float(stratification)
 
-        # get color
-        height_val = 0.0
-        for height in height_to_terrain.keys():
-            if val > height:
-                height_val = max(height_val, height)
-        color = terrain_to_color[height_to_terrain[height_val]]
+        if simulate_rainfall and water_array[x, y] > 0.0001:
+            color = terrain_to_color['water']
+        else:
+            # get color
+            height_val = 0.0
+            for height in height_to_terrain.keys():
+                if val > height:
+                    height_val = max(height_val, height)
+            color = terrain_to_color[height_to_terrain[height_val]]
+
         new_color = [0, 0, 0]
-        val = min(max(val, 0.0), 1.0)
+        val = min(max(val, 0.0), 0.5)
         new_color[0] = int(color[0] * 2.0 * val)
         new_color[1] = int(color[1] * 2.0 * val)
         new_color[2] = int(color[2] * 2.0 * val)
