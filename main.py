@@ -19,7 +19,11 @@ base_height = -0.10
 simulate_rainfall = False
 
 # random params
-offset = (random.uniform(0, 1), random.uniform(0, 1))
+base_temperature = random.uniform(0, 1)
+base_humidity = random.uniform(0, 1)
+terrain_c = (random.uniform(0, 1), random.uniform(0, 1))
+temperature_c = (random.uniform(0, 1), random.uniform(0, 1))
+humidity_c = (random.uniform(0, 1), random.uniform(0, 1))
 peaks = []
 for i in range(npeaks):
     peaks.append([random.uniform(-0.3, 0.3), random.uniform(-0.3, 0.3)])
@@ -44,18 +48,48 @@ terrain_to_color = {
 
 print "Generating noise...\n"
 
+# terrain
 noise_array = np.zeros(res, dtype=np.float32)
 for x in range(res[0]):
     for y in range(res[1]):
         xc = (float(x) / res[0] * 2.0) - 1.0
         yc = (float(y) / res[1] * 2.0) - 1.0
+
         val = 0
         i = 1
         while i <= turb_factor:
-            val += (noise.pnoise2((xc + offset[0]) * i, (yc + offset[1]) * i, octaves=noctaves)) / i
+            val += (noise.pnoise2((xc + terrain_c[0]) * i, (yc + terrain_c[1]) * i, octaves=noctaves)) / i
             i *= 2
         val = (val + 1.0) / 2.0
         noise_array[x, y] = val
+
+        sys.stdout.write("\r{:3.2f}%".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
+        sys.stdout.flush()
+
+# temperature
+temperature_array = np.zeros(res, dtype=np.float32)
+for x in range(res[0]):
+    for y in range(res[1]):
+        xc = (float(x) / res[0] * 2.0) - 1.0
+        yc = (float(y) / res[1] * 2.0) - 1.0
+
+        val = noise.pnoise2((xc + temperature_c[0]) * i, (yc + temperature_c[1]) * i, octaves=noctaves)
+        val = (val + 1.0) / 2.0
+        temperature_array[x, y] = val
+
+        sys.stdout.write("\r{:3.2f}%".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
+        sys.stdout.flush()
+
+# humidity
+humidity_array = np.zeros(res, dtype=np.float32)
+for x in range(res[0]):
+    for y in range(res[1]):
+        xc = (float(x) / res[0] * 2.0) - 1.0
+        yc = (float(y) / res[1] * 2.0) - 1.0
+
+        val = noise.pnoise2((xc + humidity_c[0]) * i, (yc + humidity_c[1]) * i, octaves=noctaves)
+        val = (val + 1.0) / 2.0
+        humidity_array[x, y] = val
 
         sys.stdout.write("\r{:3.2f}%".format(100 * float(x * res[1] + y) / (res[0] * res[1])))
         sys.stdout.flush()
@@ -170,6 +204,12 @@ for x in range(res[0]):
 im = Image.fromarray(im_array, mode="RGB")
 Image._show(im)
 
-print "\ndone.\nIslands generated with offset (" + str(offset[0]) + ", " + str(offset[1]) + ") and peaks:"
+offset_matrix = np.zeros((3, 2), dtype=float)
+offset_matrix[0, :] = terrain_c
+offset_matrix[1, :] = temperature_c
+offset_matrix[2, :] = humidity_c
+print "\ndone.\nIslands generated with offsets:"
+print offset_matrix
+print "and peaks:\n"
 for peak in peaks:
     print peak
